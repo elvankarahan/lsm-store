@@ -2,6 +2,7 @@ package lsm
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,30 @@ func TestSentinelErrors(t *testing.T) {
 				t.Errorf("errors.Is(%s, %s) = true, want distinct errors", name, otherName)
 			}
 		}
+	}
+}
+
+func TestWithDefaultsKeepsAllFields(t *testing.T) {
+	var o Options
+	v := reflect.ValueOf(&o).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		switch f.Kind() {
+		case reflect.Int, reflect.Int64:
+			f.SetInt(12345)
+		case reflect.Bool:
+			f.SetBool(true)
+		case reflect.Ptr:
+			f.Set(reflect.New(f.Type().Elem()))
+		default:
+			t.Fatalf("field %s: unhandled kind %s, extend this test",
+				v.Type().Field(i).Name, f.Kind())
+		}
+	}
+
+	got := o.withDefaults()
+	if !reflect.DeepEqual(got, o) {
+		t.Errorf("withDefaults changed a non-zero field:\ngot  %+v\nwant %+v", got, o)
 	}
 }
 

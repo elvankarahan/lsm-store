@@ -48,14 +48,14 @@ type Options struct {
 // DefaultOptions returns Options with every field set to its default.
 func DefaultOptions() Options {
 	return Options{
-		MemTableSize:        4 * 1024 * 1024,
+		MemTableSize:        4 << 20,
 		SyncWrites:          false,
-		BlockSize:           4 * 1024,
+		BlockSize:           4 << 10,
 		BloomBitsPerKey:     10,
 		L0CompactionTrigger: 4,
-		L1MaxBytes:          10 * 1024 * 1024,
+		L1MaxBytes:          10 << 20,
 		LevelSizeMultiplier: 10,
-		TargetFileSize:      2 * 1024 * 1024,
+		TargetFileSize:      2 << 20,
 		MaxLevels:           7,
 		Logger:              slog.New(slog.DiscardHandler),
 	}
@@ -64,36 +64,33 @@ func DefaultOptions() Options {
 // withDefaults returns a copy of o where every zero-valued field has been
 // replaced by its default. Non-zero fields are kept unchanged.
 func (o Options) withDefaults() Options {
-	cp := DefaultOptions()
-	if o.MemTableSize != 0 {
-		cp.MemTableSize = o.MemTableSize
+	def := DefaultOptions()
+	if o.MemTableSize == 0 {
+		o.MemTableSize = def.MemTableSize
 	}
-	if o.SyncWrites {
-		cp.SyncWrites = o.SyncWrites
+	if o.BlockSize == 0 {
+		o.BlockSize = def.BlockSize
 	}
-	if o.BlockSize != 0 {
-		cp.BlockSize = o.BlockSize
+	if o.BloomBitsPerKey == 0 {
+		o.BloomBitsPerKey = def.BloomBitsPerKey
 	}
-	if o.BloomBitsPerKey != 0 {
-		cp.BloomBitsPerKey = o.BloomBitsPerKey
+	if o.L0CompactionTrigger == 0 {
+		o.L0CompactionTrigger = def.L0CompactionTrigger
 	}
-	if o.L0CompactionTrigger != 0 {
-		cp.L0CompactionTrigger = o.L0CompactionTrigger
+	if o.L1MaxBytes == 0 {
+		o.L1MaxBytes = def.L1MaxBytes
 	}
-	if o.L1MaxBytes != 0 {
-		cp.L1MaxBytes = o.L1MaxBytes
+	if o.LevelSizeMultiplier == 0 {
+		o.LevelSizeMultiplier = def.LevelSizeMultiplier
 	}
-	if o.LevelSizeMultiplier != 0 {
-		cp.LevelSizeMultiplier = o.LevelSizeMultiplier
+	if o.TargetFileSize == 0 {
+		o.TargetFileSize = def.TargetFileSize
 	}
-	if o.TargetFileSize != 0 {
-		cp.TargetFileSize = o.TargetFileSize
+	if o.MaxLevels == 0 {
+		o.MaxLevels = def.MaxLevels
 	}
-	if o.MaxLevels != 0 {
-		cp.MaxLevels = o.MaxLevels
+	if o.Logger == nil {
+		o.Logger = def.Logger
 	}
-	if o.Logger != nil {
-		cp.Logger = o.Logger
-	}
-	return cp
+	return o
 }
