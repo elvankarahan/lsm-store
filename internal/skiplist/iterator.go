@@ -1,36 +1,30 @@
 package skiplist
 
 type Iterator[K, V any] struct {
-	list    *SkipList[K, V]
-	current *node[K, V]
+	list *SkipList[K, V]
+	cur  *node[K, V]
 }
 
 func (it *Iterator[K, V]) First() {
-	it.list.mu.RLock()
-	defer it.list.mu.RUnlock()
-	it.current = it.list.head.next[0]
+	it.cur = it.list.head.next[0].Load()
 }
 
 func (it *Iterator[K, V]) SeekGE(key K) {
-	it.list.mu.RLock()
-	defer it.list.mu.RUnlock()
-	it.current = it.list.findGreaterOrEqual(key, nil)
+	it.cur = it.list.findGreaterOrEqual(key, nil)
 }
 
 func (it *Iterator[K, V]) Next() {
-	it.list.mu.RLock()
-	defer it.list.mu.RUnlock()
-	it.current = it.current.next[0]
+	it.cur = it.cur.next[0].Load()
 }
 
 func (it *Iterator[K, V]) Valid() bool {
-	return it.current != nil
+	return it.cur != nil
 }
 
 func (it *Iterator[K, V]) Key() K {
-	return it.current.key
+	return it.cur.key
 }
 
 func (it *Iterator[K, V]) Value() V {
-	return it.current.val
+	return it.cur.val
 }

@@ -2,7 +2,7 @@ package skiplist
 
 import (
 	"math/rand/v2"
-	"sync"
+	"sync/atomic"
 )
 
 // MaxHeight with p = 1/4, 12 levels handle
@@ -12,27 +12,27 @@ const MaxHeight = 12
 type node[K, V any] struct {
 	key  K
 	val  V
-	next []*node[K, V]
+	next []atomic.Pointer[node[K, V]]
 }
 
 type SkipList[K, V any] struct {
 	head   *node[K, V]
 	cmp    func(a, b K) int
-	height int
-	length int
+	height atomic.Int64
+	length atomic.Int64
 	rng    *rand.Rand
-	mu     sync.RWMutex
 }
 
 func New[K, V any](cmp func(a, b K) int) *SkipList[K, V] {
-	return &SkipList[K, V]{
+	list := &SkipList[K, V]{
 		head: &node[K, V]{
-			next: make([]*node[K, V], MaxHeight),
+			next: make([]atomic.Pointer[node[K, V]], MaxHeight),
 		},
-		cmp:    cmp,
-		height: 1,
-		rng:    rand.New(rand.NewPCG(1, 2)),
+		cmp: cmp,
+		rng: rand.New(rand.NewPCG(1, 2)),
 	}
+	list.height.Store(1)
+	return list
 }
 
 func (s *SkipList[K, V]) randomHeight() int {
@@ -45,10 +45,10 @@ func (s *SkipList[K, V]) randomHeight() int {
 
 func (s *SkipList[K, V]) findGreaterOrEqual(key K, prev *[MaxHeight]*node[K, V]) *node[K, V] {
 	x := s.head
-	level := s.height - 1
+	level := int(s.height.Load()) - 1
 
 	for {
-		next := x.next[level]
+		next := x.next[level].Load()
 
 		if next != nil && s.cmp(next.key, key) < 0 {
 			x = next
@@ -64,38 +64,35 @@ func (s *SkipList[K, V]) findGreaterOrEqual(key K, prev *[MaxHeight]*node[K, V])
 	}
 }
 
+// Insert callers must serialize; there is no lock
 func (s *SkipList[K, V]) Insert(key K, val V) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	var prev [MaxHeight]*node[K, V]
 	found := s.findGreaterOrEqual(key, &prev)
 	if found != nil && s.cmp(found.key, key) == 0 {
 		return false
 	}
 	h := s.randomHeight()
-	if h > s.height {
-		for i := s.height; i < h; i++ {
+	oldH := int(s.height.Load())
+	if h > oldH {
+		for i := oldH; i < h; i++ {
 			prev[i] = s.head
 		}
-		s.height = h
+		s.height.Store(int64(h))
 	}
 	n := &node[K, V]{
 		key:  key,
 		val:  val,
-		next: make([]*node[K, V], h),
+		next: make([]atomic.Pointer[node[K, V]], h),
 	}
 	for i := range h {
-		n.next[i] = prev[i].next[i]
-		prev[i].next[i] = n
+		n.next[i].Store(prev[i].next[i].Load())
+		prev[i].next[i].Store(n)
 	}
-	s.length++
+	s.length.Add(1)
 	return true
 }
 
 func (s *SkipList[K, V]) Get(key K) (V, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	found := s.findGreaterOrEqual(key, nil)
 	if found != nil && s.cmp(found.key, key) == 0 {
 		return found.val, true
@@ -105,20 +102,16 @@ func (s *SkipList[K, V]) Get(key K) (V, bool) {
 }
 
 func (s *SkipList[K, V]) Len() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.length
+	return int(s.length.Load())
 }
 
 func (s *SkipList[K, V]) Height() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.height
+	return int(s.height.Load())
 }
 
 func (s *SkipList[K, V]) NewIterator() *Iterator[K, V] {
 	return &Iterator[K, V]{
-		list:    s,
-		current: nil,
+		list: s,
+		cur:  nil,
 	}
 }

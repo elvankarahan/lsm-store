@@ -29,6 +29,64 @@ func collect[K, V any](s *skiplist.SkipList[K, V]) ([]K, []V) {
 	return ks, vs
 }
 
+func TestConcurrentReadWrite(t *testing.T) {
+	l := skiplist.New[int, int](cmp.Compare[int])
+	const n = 10000
+
+	var done atomic.Bool
+	var wg sync.WaitGroup
+
+	// readers
+	for range 4 {
+		wg.Go(func() {
+			for !done.Load() {
+				for range 5 {
+					k := rand.IntN(n)
+					if v, ok := l.Get(k); ok && v != k {
+						t.Errorf("Get(%d) returned wrong value %d", k, v)
+						return
+					}
+				}
+
+				it := l.NewIterator()
+				it.First()
+				last := -1
+				for it.Valid() {
+					if it.Key() <= last {
+						t.Errorf("key is invalid")
+						return
+					}
+					if it.Value() != it.Key() {
+						t.Errorf("error")
+					}
+					last = it.Key()
+					it.Next()
+				}
+			}
+		})
+	}
+
+	// writer
+	for _, k := range rand.Perm(n) {
+		l.Insert(k, k)
+	}
+	done.Store(true)
+	wg.Wait()
+
+	le := l.Len()
+	if le != n {
+		t.Errorf("Len() = %d, want %d", n, le)
+	}
+	it := l.NewIterator()
+	it.First()
+	for i := range n {
+		if v, ok := l.Get(i); !ok || v != i {
+			t.Errorf("wrong value")
+		}
+	}
+
+}
+
 func TestTT(t *testing.T) {
 	l := newIntList()
 	model := make(map[int]string, 1000)
