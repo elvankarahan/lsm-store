@@ -21,8 +21,11 @@ func New() *MemTable {
 }
 
 func (m *MemTable) Add(seq uint64, kind keys.Kind, userKey, value []byte) {
-	key := keys.Append(nil, userKey, seq, kind)
-	val := bytes.Clone(value)
+	buf := make([]byte, 0, len(userKey)+keys.TrailerLen+len(value))
+	buf = keys.Append(buf, userKey, seq, kind)
+	key := buf[:len(userKey)+keys.TrailerLen]
+	buf = append(buf, value...)
+	val := buf[len(key):]
 	m.list.Insert(key, val)
 	m.size.Add(int64(len(key) + len(val) + 32))
 }

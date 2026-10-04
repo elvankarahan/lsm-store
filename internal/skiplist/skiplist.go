@@ -74,10 +74,10 @@ func (s *SkipList[K, V]) Insert(key K, val V) bool {
 	h := s.randomHeight()
 	oldH := int(s.height.Load())
 	if h > oldH {
+		s.height.Store(int64(h))
 		for i := oldH; i < h; i++ {
 			prev[i] = s.head
 		}
-		s.height.Store(int64(h))
 	}
 	n := &node[K, V]{
 		key:  key,
@@ -86,6 +86,8 @@ func (s *SkipList[K, V]) Insert(key K, val V) bool {
 	}
 	for i := range h {
 		n.next[i].Store(prev[i].next[i].Load())
+	}
+	for i := range h {
 		prev[i].next[i].Store(n)
 	}
 	s.length.Add(1)
