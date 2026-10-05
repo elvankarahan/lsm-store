@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-
-	"github.com/elvan/lsm-store"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
@@ -16,6 +14,11 @@ var crcTable = crc32.MakeTable(crc32.Castagnoli)
 const (
 	HeaderSize    = 8        // 4 bytes CRC32C + 4 bytes length
 	MaxRecordSize = 64 << 20 // 64 MiB sanity limit
+)
+
+var (
+	ErrCorrupt        = errors.New("wal: data is corrupt")
+	ErrRecordTooLarge = errors.New("wal: record exceeds maximum size")
 )
 
 type Syncer interface {
@@ -43,7 +46,7 @@ func (r *Reader) Next() ([]byte, error) {
 	crc := binary.LittleEndian.Uint32(r.hdr[0:4])
 	length := binary.LittleEndian.Uint32(r.hdr[4:8])
 	if length > MaxRecordSize {
-		return nil, fmt.Errorf("wal: record length %d too large: %w", length, lsm.ErrCorrupt)
+		return nil, fmt.Errorf("wal: record length %d too large: %w", length, ErrRecordTooLarge)
 	}
 
 	payload := make([]byte, length)
@@ -56,7 +59,7 @@ func (r *Reader) Next() ([]byte, error) {
 	}
 
 	if crc32.Checksum(payload, crcTable) != crc {
-		return nil, fmt.Errorf("wal: checksum mismatch: %w", lsm.ErrCorrupt)
+		return nil, fmt.Errorf("wal: checksum mismatch: %w", ErrCorrupt)
 	}
 	return payload, nil
 }
@@ -77,7 +80,7 @@ func NewWriter(w io.Writer) *Writer {
 
 func (w *Writer) WriteRecord(payload []byte) error {
 	if len(payload) > MaxRecordSize {
-		return fmt.Errorf("wal: %w", lsm.ErrValueTooLarge)
+		return fmt.Errorf("wal: %w", ErrRecordTooLarge)
 	}
 	crc := crc32.Checksum(payload, crcTable)
 	binary.LittleEndian.PutUint32(w.hdr[0:4], crc)

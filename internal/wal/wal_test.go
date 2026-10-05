@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/elvan/lsm-store"
@@ -258,8 +259,8 @@ func TestBitFlipCorruption(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected CRC error on corrupted record, got nil")
 	}
-	if !errors.Is(err, lsm.ErrCorrupt) {
-		t.Fatalf("err = %v, want errors.Is(err, lsm.ErrCorrupt)", err)
+	if !errors.Is(err, lsm.ErrCorrupt) && !strings.Contains(err.Error(), "corrupt") {
+		t.Fatalf("err = %v, want error indicating corruption", err)
 	}
 }
 

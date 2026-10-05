@@ -3,9 +3,7 @@ package wal
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 
-	"github.com/elvan/lsm-store"
 	"github.com/elvan/lsm-store/internal/keys"
 )
 
@@ -60,8 +58,6 @@ func (b *Batch) Encode(dst []byte) []byte {
 	return dst
 }
 
-var errCorrupt = fmt.Errorf("wal: %w", lsm.ErrCorrupt)
-
 func readBytes(data []byte) (field, rest []byte, ok bool) {
 	l, n := binary.Uvarint(data)
 	if n <= 0 || l > uint64(len(data)-n) {
@@ -73,23 +69,23 @@ func readBytes(data []byte) (field, rest []byte, ok bool) {
 
 func DecodeBatch(data []byte) (Batch, error) {
 	if len(data) < 12 {
-		return Batch{}, errCorrupt
+		return Batch{}, ErrCorrupt
 	}
 	seq := binary.LittleEndian.Uint64(data[:8])
 	count := binary.LittleEndian.Uint32(data[8:12])
 	data = data[12:]
 	if count > uint32(len(data)/2) {
-		return Batch{}, errCorrupt
+		return Batch{}, ErrCorrupt
 	}
 
 	entries := make([]Entry, 0, min(count, 1024))
 	for range count {
 		if len(data) == 0 {
-			return Batch{}, errCorrupt
+			return Batch{}, ErrCorrupt
 		}
 		kind := keys.Kind(data[0])
 		if kind != keys.KindSet && kind != keys.KindDelete {
-			return Batch{}, errCorrupt
+			return Batch{}, ErrCorrupt
 		}
 		data = data[1:]
 
@@ -97,17 +93,17 @@ func DecodeBatch(data []byte) (Batch, error) {
 		var ok bool
 		e.Kind = kind
 		if e.Key, data, ok = readBytes(data); !ok {
-			return Batch{}, errCorrupt
+			return Batch{}, ErrCorrupt
 		}
 		if kind == keys.KindSet {
 			if e.Value, data, ok = readBytes(data); !ok {
-				return Batch{}, errCorrupt
+				return Batch{}, ErrCorrupt
 			}
 		}
 		entries = append(entries, e)
 	}
 	if len(data) != 0 {
-		return Batch{}, errCorrupt
+		return Batch{}, ErrCorrupt
 	}
 	return Batch{Seq: seq, Entries: entries}, nil
 }
