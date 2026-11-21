@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 
+	"github.com/elvan/lsm-store/internal/bloom"
 	"github.com/elvan/lsm-store/internal/keys"
 )
 
@@ -23,6 +24,7 @@ type Reader struct {
 	size   int64
 	footer Footer
 	index  []IndexEntry
+	filter bloom.Filter
 }
 
 func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
@@ -38,6 +40,18 @@ func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var filterRaw []byte
+	if footer.FilterLength > 0 {
+		if footer.FilterOffset+footer.FilterLength > uint64(size-FooterLen) {
+			return nil, ErrCorrupt
+		}
+		filterRaw = make([]byte, footer.FilterLength)
+		if _, err := r.ReadAt(filterRaw, int64(footer.FilterOffset)); err != nil {
+			return nil, fmt.Errorf("sstable: read filter block: %w", err)
+		}
+	}
+
 	if footer.IndexOffset+footer.IndexLength > uint64(size-FooterLen) {
 		return nil, ErrCorrupt
 	}
@@ -76,6 +90,7 @@ func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
 		size:   size,
 		footer: footer,
 		index:  indexEntry,
+		filter: filterRaw,
 	}, nil
 
 }
@@ -90,10 +105,19 @@ func (r *Reader) readBlock(idx int) (*blockReader, error) {
 	return newBlockReader(raw)
 }
 
+func (r *Reader) MayContain(userKey []byte) bool {
+	return r.filter.MayContain(userKey)
+}
+
 func (r *Reader) Get(key []byte) ([]byte, error) {
 	if len(r.index) == 0 {
 		return nil, ErrNotFound
 	}
+
+	if !r.filter.MayContain(keys.UserKey(key)) {
+		return nil, ErrNotFound
+	}
+
 	idx, _ := slices.BinarySearchFunc(r.index, key, func(e IndexEntry, target []byte) int {
 		return keys.Compare(e.LastKey, target)
 	})

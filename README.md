@@ -118,8 +118,8 @@ lsm-store/
 - [x] **M2:** Generic lock-free-read skip list (`atomic.Pointer`) & MemTable
 - [x] **M3:** Write-Ahead Log (CRC32C framing, batch encoding, torn-tail recovery)
 - [x] **M4:** DB v1 (`Open`/`Put`/`Get`/`Delete`/`Close`, `LOCK` file, WAL replay & crash tests)
-- [ ] **M5:** SSTables (4 KiB CRC-checked blocks, sparse index, `io.ReaderAt`, iterator) *(in progress)*
-- [ ] **M6:** Bloom filters (double hashing) integrated into SSTables
+- [x] **M5:** SSTables (4 KiB CRC-checked blocks, sparse index, `io.ReaderAt`, iterator) *(in progress)*
+- [x] **M6:** Bloom filters (double hashing) integrated into SSTables
 - [ ] **M7:** Background MemTable flush, `MANIFEST` / `CURRENT`, reference-counted versions
 - [ ] **M8:** Heap-based merging iterator & level iterator
 - [ ] **M9:** Background leveled compaction & model-based randomized testing

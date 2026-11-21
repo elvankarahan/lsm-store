@@ -1,14 +1,17 @@
 package sstable
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 
+	"github.com/elvan/lsm-store/internal/bloom"
 	"github.com/elvan/lsm-store/internal/keys"
 )
 
 const defaultBlockSize = 4 << 10
+const defaultBloomBitsPerKey = 10
 
 type Writer struct {
 	w          io.Writer
@@ -18,6 +21,7 @@ type Writer struct {
 	indexBlock blockWriter
 	lastKey    []byte
 	closed     bool
+	userKeys   [][]byte
 }
 
 func NewWriter(w io.Writer, blockSize int) *Writer {
@@ -38,6 +42,9 @@ func (w *Writer) Add(key, value []byte) error {
 	if len(w.lastKey) > 0 && keys.Compare(w.lastKey, key) >= 0 {
 		return fmt.Errorf("writer: order is wrong")
 	}
+
+	uKeys := bytes.Clone(keys.UserKey(key))
+	w.userKeys = append(w.userKeys, uKeys)
 
 	w.dataBlock.add(key, value)
 	w.lastKey = append(w.lastKey[:0], key...)
@@ -60,6 +67,18 @@ func (w *Writer) Close() error {
 	if err != nil {
 		return err
 	}
+	footer := Footer{}
+
+	f := bloom.New(w.userKeys, defaultBloomBitsPerKey)
+	if len(f) > 0 {
+		footer.FilterOffset = w.offset
+		footer.FilterLength = uint64(len(f))
+		_, err := w.w.Write(f)
+		if err != nil {
+			return err
+		}
+		w.offset += footer.FilterLength
+	}
 
 	indexRaw := w.indexBlock.finish()
 	_, err = w.w.Write(indexRaw)
@@ -69,7 +88,8 @@ func (w *Writer) Close() error {
 	indexOffset := w.offset
 	indexLength := uint64(len(indexRaw))
 
-	footer := Footer{IndexOffset: indexOffset, IndexLength: indexLength}
+	footer.IndexLength = indexLength
+	footer.IndexOffset = indexOffset
 
 	footerRaw := footer.Encode(nil)
 	_, err = w.w.Write(footerRaw)
